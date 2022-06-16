@@ -1,0 +1,39 @@
+version: '3.8'
+#список наших сервісів (контейнерів)
+services:
+  web:
+    container_name: e-journal_web
+#   маршрутизуємо порти
+    ports:
+    # контейнер буде доступний на порту 80 основної системи
+      - "80:80"
+    build:
+#     контекст (каталог, що містить Dockerfile)
+      context: .
+      dockerfile: ./docker/e-Journal.dockerfile
+    depends_on:
+      - db
+    volumes: # шлях указується від директорії, в якій розміщено docker-compose.yml
+     #   !!!!!!!!!!  ПАПКА З ПРОЕКТОМ !!!!!!!!
+     # монтуємо нашу кореневу директорію (з index.php-скриптом) в кореневу папку http-сервера контейнера
+      - .:/var/www/localhost/htdocs/
+     # монтуєм файл логів доступу Apache2 в контейнер
+      - ./docker/logs/access.log:/var/www/logs/access.log
+     # монтуєм файл логів помилок Apache2 в контейнер
+      - ./docker/logs/error.log:/var/www/logs/error.log
+    environment:
+      #PHP_EXTENSION_XDEBUG: 1
+      PHP_INI_DIR: /usr/local/etc/php
+      TZ: "Europe/Kiev"
+      APACHE_LOG_DIR: /var/www/logs
+  db:
+    container_name: e-journal_db
+    image: postgres:14-alpine 
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: $DB_USERNAME
+      POSTGRES_PASSWORD: $DB_PASSWORD
+      POSTGRES_DB: $DB_DATABASE
+    volumes:
+      - ./docker/db/data:/var/lib/postgresql/data:rw
