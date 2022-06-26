@@ -14,20 +14,20 @@ use App\Models\eNaryad\Naryad;
 use App\Models\eNaryad\Preparation;
 use App\Models\eNaryad\Measure;
 use App\Http\Controllers\eNaryad\BaseController;
-use Redirect; 
+use Redirect;
 
 class NaryadController extends BaseController
-{          
+{
     public function welcome()
-    {   
+    {
         session()->forget('naryadRecord');
         session()->forget('preparations_rs');
         session()->forget('measures_rs');
         session()->forget('mode');
 
         return view('naryads.welcome', [
-            'branch'=>\App\Models\eNaryad\Dicts\Branch::dataFromLoginPrefix(), 
-            'userlogin'=>$this->getUserLogin(), 
+            'branch'=>\App\Models\eNaryad\Dicts\Branch::dataFromLoginPrefix(),
+            'userlogin'=>$this->getUserLogin(),
             'displayName'=>$this->getDisplayName()
             ]);
     }
@@ -38,36 +38,36 @@ class NaryadController extends BaseController
      * @return \Illuminate\Http\Response
      */
     public function index(Request $request)
-    {           
+    {
         $searchWarden =  '%'.$request->input('searchWarden').'%';
         $searchTerm =  '%'.$request->input('searchTerm').'%';
         $branch=$this->getBranch();
 
 
         if ($branch->id==0)
-            { 
-                $wardenlistid = Warden::where('body','like',$searchWarden)->pluck('id');       
-                $substationlistid = Substation::where('body','like',$searchTerm)->pluck('id');            
+            {
+                $wardenlistid = Warden::where('body','like',$searchWarden)->pluck('id');
+                $substationlistid = Substation::where('body','like',$searchTerm)->pluck('id');
             }
         else
-            {  $wardenlistid = Warden::where('body','like',$searchWarden)->where('branch_id',$branch->id)->pluck('id');       
+            {  $wardenlistid = Warden::where('body','like',$searchWarden)->where('branch_id',$branch->id)->pluck('id');
                $substationlistid = Substation::where('body','like',$searchTerm)->where('branch_id',$branch->id)->pluck('id');
             }
-         
-        $records = Naryad::whereIn('substation_id',$substationlistid)->whereIn('warden_id',$wardenlistid)->orderBy('id','desc')->get();
+
+        $records = Naryad::whereIn('substation_id',$substationlistid)->whereIn('warden_id',$wardenlistid)->orderBy('id','desc')->paginate(5);
 
         // чистимо Session
         session()->forget('naryadRecord');
         session()->forget('preparations_rs');
         session()->forget('measures_rs');
         session()->forget('mode');
-        
+
         return view('naryads.index', ['records'=>$records,'mode'=>'index','branch'=>$branch]);
     }
-   
-    /**  
+
+    /**
      *   !! визначаємо напрямок робіт для  створюваного НОВОГО наряду
-     */    
+     */
      public function precreate()
      {  return view('naryads.precreate', [
              'workspecs' =>\App\Models\eNaryad\Dicts\Works_Spec::worksSpecCollect(),
@@ -76,29 +76,29 @@ class NaryadController extends BaseController
              ]);
      }
 
-    /**  
+    /**
      *   !! створюєно НОВИЙ наряд
      * @return \Illuminate\Http\Response
      */
-    public function create(Request $request) 
-    {   
+    public function create(Request $request)
+    {
         //$this->mode='create';
-        $branch = $this->getBranch();    
+        $branch = $this->getBranch();
         $tasks = TypicalTask::orderBy('id')->get();
         $units = Unit::where('branch_id',$branch->id)->orderBy('id')->get();
         $wardens = Warden::where('branch_id',$branch->id)->orderBy('id')->get();
         $adjusters = Adjuster::where('branch_id',$branch->id)->orderBy('id')->get();
         $brig_m_arr = Brigade_Member::where('branch_id',$branch->id)->orderBy('id')->get();
-        $brig_e_arr =Brigade_Engineer::where('branch_id',$branch->id)->orderBy('id')->get();        
+        $brig_e_arr =Brigade_Engineer::where('branch_id',$branch->id)->orderBy('id')->get();
         $workspecs_id = $request->input('direction'); // визначена позиція списка - де робитиметься :
         // тільки для "10-ток" буде зміна типу підстанцій (і тому й переліку в dict_substations), а так "завжди =0,4"
         if ($workspecs_id==3) {$substation_type_id=2;} else {$substation_type_id=1;}
         $this->preparations_rs = array();
         $this->measures_rs = array();
         $this->naryadRecord = [
-            'order_id'=> 0,  
-            'branch_id'=>$branch->id, 
-            'unit_id' => '', 
+            'order_id'=> 0,
+            'branch_id'=>$branch->id,
+            'unit_id' => '',
             'unit_txt'=>'',
             'warden_id'=>'',
             'warden_txt'=>'',
@@ -119,7 +119,7 @@ class NaryadController extends BaseController
             'under_voltage'=>'',
             // зараз це буде передано у editPart2.blade
         ];
-        session()->forget('naryadRecord');  
+        session()->forget('naryadRecord');
         session(['naryadRecord' => $this->naryadRecord]);
 
         return view('naryads.edit',[
@@ -133,7 +133,7 @@ class NaryadController extends BaseController
             'brig_e_arr'=> $brig_e_arr,
             'brigade_m'=>'',
             'brigade_e'=>'',
-            'branch'=>$branch, 
+            'branch'=>$branch,
             'substations'=>$this->getSubstationsList($branch->id, $substation_type_id), // функція прописана в BaseController
             'workspecs' =>\App\Models\eNaryad\Dicts\Works_Spec::worksSpecCollect(), // список - де робитиметься : на 10-ках, чи на 0.4, чи ...
             'workslist'=>' виконати ', // саме текст завдання
@@ -152,20 +152,20 @@ class NaryadController extends BaseController
      * @param  $order_id - id конкретного наряду з таблиці  Naryads
      * @return \Illuminate\Http\Response
      */
-    public function edit($order_id) 
+    public function edit($order_id)
     /*
-     !! більшість даних берем з бази 
+     !! більшість даних берем з бази
      !! передаєм їх у в'юшку
      !! Але зберігаємо цю частину новоствореного наряду в масив
      !! і передаємо у session для наступних форм введення */
     {
         $record = Naryad::find($order_id);  // !! по номеру наряду який клонуємо
-        $branch=$this->getBranch(); 
-        $unit_id= $record->unit_id;        
+        $branch=$this->getBranch();
+        $unit_id= $record->unit_id;
         $brig_m_arr =Brigade_Member::where('branch_id',$branch->id)->orderBy('id')->get();   // масив усіх можливих членів бригади
         $brig_e_arr =Brigade_Engineer::where('branch_id',$branch->id)->orderBy('id')->get(); // масив усіх можливих машиністів бригади
         $brigade_m = $record->brigade_m; // перелік id-шників членів бригади у наряді
-        $brigade_e = $record->brigade_e; // перелік id-шників машиністів бригади у наряді 
+        $brigade_e = $record->brigade_e; // перелік id-шників машиністів бригади у наряді
         $wardens = Warden::where('branch_id',$branch->id)->orderBy('id')->get();
         $warden  = Warden::find($record->warden_id);
         $adjusters = Adjuster::where('branch_id',$branch->id)->orderBy('id')->get();
@@ -177,9 +177,9 @@ class NaryadController extends BaseController
         $engineers_txt='';
         if (isset($record->brigade_e)) {
             $engineers_txt = Brigade_Engineer::find(explode(",",$record->brigade_e));
-        }     
+        }
         $countbrigade = count(explode(",",$record->brigade_m))+count(explode(",",$record->brigade_e));
-        $substation = Substation::find($record->substation_id); 
+        $substation = Substation::find($record->substation_id);
         $substation_id = $substation->id;
         $substation_txt     = $substation->body;
         $substation_type_id = $substation->type_id;
@@ -189,16 +189,16 @@ class NaryadController extends BaseController
               ->where('branch_id',$branch->id)
               ->where('type_id',$substation_type_id)
               ->orderBy('body','asc')
-              ->get();                           
-  
+              ->get();
+
         $this->naryadRecord = [
-                'order_id'=>$order_id,  
-                'branch_id'=>$branch->id, 
-                'unit_id' => $unit_id, 
-                'unit_txt'=>Unit::find($record->unit_id)->body,                   
+                'order_id'=>$order_id,
+                'branch_id'=>$branch->id,
+                'unit_id' => $unit_id,
+                'unit_txt'=>Unit::find($record->unit_id)->body,
                 'warden_id'=>$record->warden_id,
                 'warden_txt'=>$warden->body.', '.$warden->group,
-                'adjuster_id'=>$record->adjuster_id,   
+                'adjuster_id'=>$record->adjuster_id,
                 'adjuster_txt'=>$adjuster->body.', '.$adjuster->group,
                 'brigade_m'=>$brigade_m,
                 'brigade_e'=>$brigade_e,
@@ -208,27 +208,27 @@ class NaryadController extends BaseController
                 'substation_type'=>$substation_type,
                 'line_id'=>$record->line_id,
                 'objects'=>$record->ojects,
-                'tasks'=>$record->tasks,                
+                'tasks'=>$record->tasks,
                 'sep_instrs'=>$record->sep_instrs,
                 'order_creator'=>$record->order_creator,
                 'order_longer'=>$record->order_longer,
                 'under_voltage'=>$record->under_voltage,
             ];
-            session()->forget('naryadRecord');  
-            session(['naryadRecord' => $this->naryadRecord]); 
-            
+            session()->forget('naryadRecord');
+            session(['naryadRecord' => $this->naryadRecord]);
+
         return view('naryads.edit',[ // !! окрім масиву $this->naryadRecord передаються у в'юшку різні списки(масиви) та змінні, що стосуються лише ції в'юшки
             'mode'=>'clone',
             'title'=>'№ '.$order_id,
-            'branch'=>$branch, 
+            'branch'=>$branch,
             'brig_m_arr' => $brig_m_arr,
             'brig_e_arr' => $brig_e_arr,
-            'units'=>Unit::where('branch_id',$branch->id)->orderBy('id')->get(), 
+            'units'=>Unit::where('branch_id',$branch->id)->orderBy('id')->get(),
             'wardens'=>$wardens,
             'adjusters'=>$adjusters,
-            'countbrigade'=>$countbrigade,            
+            'countbrigade'=>$countbrigade,
             'substations'=>$substations,
-            'workspecs' =>\App\Models\eNaryad\Dicts\Works_Spec::worksSpecCollect(),            
+            'workspecs' =>\App\Models\eNaryad\Dicts\Works_Spec::worksSpecCollect(),
             'workslist'=>$record->ojects.' виконати '.$record->tasks,
             'brigade_txt'=>$brigade_txt,
             'engineers_txt'=>$engineers_txt,
@@ -236,7 +236,7 @@ class NaryadController extends BaseController
             'naryadRecord' => $this->naryadRecord,
         ] );
     }
-    
+
     // !! *****************************************************
     public function editpart2($order_id, Request $request)
     /**********************************************************
@@ -248,19 +248,19 @@ class NaryadController extends BaseController
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-       {    
+       {
             if ($order_id==0) {$mode = 'create'; } else {$mode = 'clone'; }
             $sNaryadRecord = session('naryadRecord'); // !! спочатку з session('naryadRecord') витягуємо всі попередньо відомі дані по конкретному наряду,
             $branch_id = $sNaryadRecord['branch_id'];
             $brig_m_arr = Brigade_Member::where('branch_id',$branch_id)->orderBy('id')->get();   // масив усіх можливих членів бригади
-            $brig_e_arr = Brigade_Engineer::where('branch_id',$branch_id)->orderBy('id')->get(); // масив усіх можливих машиністів бригади     
+            $brig_e_arr = Brigade_Engineer::where('branch_id',$branch_id)->orderBy('id')->get(); // масив усіх можливих машиністів бригади
             $brigade_m = $request->input('write_to_db_brigade');
             $brigade_e = $request->input('write_to_db_engineers');
             $substation_id = $request->input('choose_substation');
             $workspecs_id = $request->input('directions');
             if ($workspecs_id==3) {$substation_type_id=2;} else {$substation_type_id=1;}
             //$substation_type_id = Substation::type_id($substation_id);
-            
+
         // розділяємо текст на частини: об'єкти та робота з поля введення workslist по слову  ' виконати '
              $workslist=trim($request->get('workslist'));
              $pos = strpos($workslist, ' виконати ');
@@ -279,18 +279,18 @@ class NaryadController extends BaseController
                 'objects' => substr($workslist,0,$pos),
                 'tasks' => substr($workslist,$pos+1),
                 'w_begin' => date ("Y-m-d H:i",strtotime($request->input('datetime_work_begin'))),
-                'w_end' => date ("Y-m-d H:i",strtotime($request->input('datetime_work_end'))),   
+                'w_end' => date ("Y-m-d H:i",strtotime($request->input('datetime_work_end'))),
                 'sep_instrs'=>$sNaryadRecord['sep_instrs'],
                 'order_creator'=>$sNaryadRecord['order_creator'],
                 'order_longer'=>$sNaryadRecord['order_longer'],
                 'under_voltage'=> $sNaryadRecord['under_voltage'],
                 ];
-               
+
                 // "заганяємо" зчитані змінені значенні з полів введення в масив в session
-                session(['naryadRecord' => $this->naryadRecord]); 
-                
-                /* 
-                * займемося ровсетом preparations_rs 
+                session(['naryadRecord' => $this->naryadRecord]);
+
+                /*
+                * займемося ровсетом preparations_rs
                 * набором рядочків таблиці preparations (підготовчих заходів), що мають прив`язку до номеру клонованого наряду
                 */
 
@@ -298,7 +298,7 @@ class NaryadController extends BaseController
                 $maxIdpreparation=0;
 
                 if ($mode == 'reedit') {  // якщо reedit, дані берем не з бази, а з session
-                        $this->preparations_rs = session('preparations_rs'); 
+                        $this->preparations_rs = session('preparations_rs');
                         if (!empty($this->preparations_rs)) {
                                $maxIdpreparation = max(array_column($this->preparations_rs,'id'));
                                $count_prepr_row = count($this->preparations_rs);
@@ -313,16 +313,16 @@ class NaryadController extends BaseController
                             $maxIdpreparation = max(array_column($this->preparations_rs,'id'));
                             $count_prepr_row = count($this->preparations_rs);
                             session(['preparations_rs' => $this->preparations_rs]);
-                        }                        
+                        }
                     }
                 if ($mode == 'create') {
                         $this->preparations_rs = array();
                     }
                     session(['preparations_rs' => $this->preparations_rs]);
-                    session(['mode' => $mode]); 
-                    
+                    session(['mode' => $mode]);
+
                 // потім з цієї в'юшки буде через контролер livewire.preparation визвано "асинхроний" livewire фрейм edit.f6Preparation -->
-              return view('naryads.editPart2',[      
+              return view('naryads.editPart2',[
                     'title' => '№ '.$order_id.' препарації',
                     'mode' => $mode,
                     'substations' => $this->getSubstationsList($this->naryadRecord['branch_id'],$this->naryadRecord['substation_type_id']),
@@ -362,7 +362,7 @@ class NaryadController extends BaseController
                 $maxIdMeasure=0;
                 $this->measures_rs = array();
                 if ($mode == 'reedit') {  // якщо reedit, дані берем не з бази, а з session
-                        $this->measures_rs = session('measures_rs'); 
+                        $this->measures_rs = session('measures_rs');
                         if (!empty($this->measures_rs)) {
                                $maxIdMeasure = max(array_column($this->measures_rs,'id'));
                                $count_meas_row = count($this->measures_rs);
@@ -375,11 +375,11 @@ class NaryadController extends BaseController
                             $this->measures_rs = json_decode($meas_data,true);
                             $maxIdMeasure = max(array_column($this->measures_rs,'id'));
                             $count_meas_row = count($this->measures_rs);
-                        }                        
+                        }
                     }
-                
+
                 session(['measures_rs' => $this->measures_rs]);
-               
+
 
                 return view('naryads.editPart4',[
                     'title' => '№ '.$order_id.' підготовка2',
@@ -401,7 +401,7 @@ class NaryadController extends BaseController
             }
 
 
-    public function store(Request $request)  {        
+    public function store(Request $request)  {
                 $naryad = new Naryad;
                 $naryadStored = $request->session()->get('naryadRecord'); //$naryadStored = session('naryadRecord'); // можна і так
                 $naryad->id = Naryad::max('id')+1;
@@ -424,17 +424,17 @@ class NaryadController extends BaseController
                 $naryad->works_spec_id = $naryadStored['workspecs_id'];
                 $naryad->line_id = $naryadStored['line_id'];
                 $naryad->under_voltage = trim($request->get('under_voltage'));
-                $request->flash();                              
+                $request->flash();
                 $naryad->save();
                 $preparations_rs = session('preparations_rs');
                  $count_prepr_row = count($preparations_rs);
                  if ($count_prepr_row > 0) {
                  foreach ($preparations_rs as $prRow)
-                    {   $preparationsDBRecord = new \App\Models\eNaryad\Preparation;    
+                    {   $preparationsDBRecord = new \App\Models\eNaryad\Preparation;
                         $preparationsDBRecord->naryad_id  = $naryad->id;
                         $preparationsDBRecord->target_obj = $prRow['target_obj'];
                         $preparationsDBRecord->body = $prRow['body'];
-                        $preparationsDBRecord->save;         
+                        $preparationsDBRecord->save;
                     }
                 }
                 $meashures_rs = session('meashures_rs');
@@ -445,10 +445,10 @@ class NaryadController extends BaseController
                        $meashuresDBRecord->naryad_id  = $naryad->id;
                        $meashuresDBRecord->licensor = $msRow['licensor'];
                        $meashuresDBRecord->lic_date = $msRow['lic_date'];
-                       $meashuresDBRecord->save;         
+                       $meashuresDBRecord->save;
                    }
                }
-                 return Redirect::to('naryads')->with('success', 'Наряд додано!');   
+                 return Redirect::to('naryads')->with('success', 'Наряд додано!');
             }
 
 
@@ -458,14 +458,14 @@ class NaryadController extends BaseController
            session(['mode'  => 'reedit']);
            $this->preparations_rs = session('preparations_rs');
            $this->naryadRecord = session('naryadRecord');
-           $branch=$this->getBranch(); 
+           $branch=$this->getBranch();
            $wardens = Warden::where('branch_id', $branch->id)->orderBy('id')->get();
            $warden  = Warden::find($this->naryadRecord['warden_id']);
            $adjusters = Adjuster::where('branch_id',$branch->id)->orderBy('id')->get();
            $adjuster = Adjuster::find($this->naryadRecord['adjuster_id']);
 
            $brig_m_arr =Brigade_Member::where('branch_id',$branch->id)->orderBy('id')->get();   // масив усіх можливих членів бригади
-           $brig_e_arr =Brigade_Engineer::where('branch_id',$branch->id)->orderBy('id')->get(); // масив усіх можливих машиністів бригади  
+           $brig_e_arr =Brigade_Engineer::where('branch_id',$branch->id)->orderBy('id')->get(); // масив усіх можливих машиністів бригади
            $this->substation_type_id = Substation::find($this->naryadRecord['substation_id'])->type_id;
            $brigade_txt ='';
            if (isset($this->naryadRecord['brigade_m'])) {
@@ -479,20 +479,20 @@ class NaryadController extends BaseController
             'mode'=>'reedit',
             'order_id'=>$order_id,
             'title'=>' клон № '.$order_id,
-            'branch'=>$branch, 
+            'branch'=>$branch,
             'unit_id' => $this->naryadRecord['unit_id'],
-            'unit_txt'=>Unit::find($this->naryadRecord['unit_id'])->body,            
-            'units'=>Unit::where('branch_id',$branch->id)->orderBy('id')->get(),            
+            'unit_txt'=>Unit::find($this->naryadRecord['unit_id'])->body,
+            'units'=>Unit::where('branch_id',$branch->id)->orderBy('id')->get(),
             'wardens'=>$wardens,
             'warden_id'=>$this->naryadRecord['warden_id'],
             'warden_txt'=>$warden->body.', '.$warden->group,
             'adjusters'=>$adjusters,
             'adjuster_id'=>$this->naryadRecord['adjuster_id'],
-            'adjuster_txt'=>$adjuster->body.', '.$adjuster->group,        
+            'adjuster_txt'=>$adjuster->body.', '.$adjuster->group,
             'brigade_m'=>$this->naryadRecord['brigade_m'], // id-шники через кому
             'brig_m_arr' => $brig_m_arr,
             'brigade_e'=>$this->naryadRecord['brigade_e'], // id-шники через кому
-            'brig_e_arr' => $brig_e_arr,            
+            'brig_e_arr' => $brig_e_arr,
             'brigade_txt'=>$brigade_txt,
             'engineers_txt'=>$engineers_txt,
             'countbrigade'=>count(explode(",",$this->naryadRecord['brigade_m']))+count(explode(",",$this->naryadRecord['brigade_m'])),
@@ -515,7 +515,7 @@ class NaryadController extends BaseController
         }
 
    // !!! повернення до редагування 2 частини наряду
-   public function reedit2($order_id, Request $request)  { 
+   public function reedit2($order_id, Request $request)  {
        session(['mode'  => 'reedit']);
        session(['measures_rs'  => $this->measures_rs]);
        $this->preparations_rs = session('preparations_rs');
@@ -523,7 +523,7 @@ class NaryadController extends BaseController
         if (empty($this->preparations_rs)) {$count_prepr_row=0;$maxIdpreparation=0;}
         else { $maxIdpreparation = max(array_column($this->preparations_rs,'id'));
         $count_prepr_row = count($this->preparations_rs);}
-        
+
        $this->naryadRecord = session('naryadRecord');
 
        $this->naryadRecord['sep_instrs'] = trim($request->get('sep_instrs_txt'));
@@ -532,14 +532,14 @@ class NaryadController extends BaseController
        $this->naryadRecord['order_longto'] = date("Y-m-d H:i",strtotime(trim($request->datetime_order_longed)));
        $this->naryadRecord['order_longer']  =  trim($request->inp_order_longer);
        $this->naryadRecord['under_voltage'] = trim($request->get('under_voltage'));
-       
-       session()->forget('naryadRecord');      
-       session(['naryadRecord' => $this->naryadRecord]);      
-            
+
+       session()->forget('naryadRecord');
+       session(['naryadRecord' => $this->naryadRecord]);
+
         return view('naryads.editPart2',[
         'mode'=>'reedit',
         'title'=>' клон № '.$order_id,
-        'branch_id'=>$this->naryadRecord['branch_id'], 
+        'branch_id'=>$this->naryadRecord['branch_id'],
         'substation_id'=>$this->naryadRecord['substation_id'],
         'substation_txt'=>Substation::find($this->naryadRecord['substation_id'])->body,
         'substation_type_id'=>$this->naryadRecord['substation_type_id'],
@@ -554,18 +554,18 @@ class NaryadController extends BaseController
  // !!! повернення до редагування 3 частини наряду
  public function reedit3($order_id, Request $request)  {
    // session(['measures_rs'  => $this->measures_rs]);
-     session(['mode'  => 'reedit']);         
+     session(['mode'  => 'reedit']);
      return view('naryads.editPart3',[
      'mode'=>'reedit',
      'title'=>' клон № '.$order_id,
      'naryadRecord' => session('naryadRecord')
      ]);
  }
-           
+
 // !!! повернення до редагування 4 частини наряду
 public function reedit4($order_id, Request $request)  {
     // session(['measures_rs'  => $this->measures_rs]);
-      session(['mode'  => 'reedit']);         
+      session(['mode'  => 'reedit']);
       $count_meas_row=0;
       $maxIdMeasure=0;
       $this->measures_rs = session('measures_rs');
@@ -576,8 +576,8 @@ public function reedit4($order_id, Request $request)  {
 
       $this->naryadRecord = session('naryadRecord');
       $this->naryadRecord['under_voltage'] = trim($request->get('under_voltage'));
-      session(['naryadRecord' => $this->naryadRecord]);  
-      
+      session(['naryadRecord' => $this->naryadRecord]);
+
       return view('naryads.editPart4',[
       'mode'=>'reedit',
       'title'=>' клон № '.$order_id,
@@ -588,7 +588,7 @@ public function reedit4($order_id, Request $request)  {
       ]);
   }
 
- 
+
 
 
     /**
@@ -606,7 +606,7 @@ public function reedit4($order_id, Request $request)  {
 
     public function pdf(Naryad $naryad)
     {
-        $branch=$this->getBranch(); 
+        $branch=$this->getBranch();
         $nom_naryad='№ '.$naryad->id;
         $unit_txt = Unit::find($naryad->unit_id)->body;
         $warden_txt =Warden::find($naryad->warden_id)->body.', '.Warden::find($naryad->warden_id)->group;
@@ -619,7 +619,7 @@ public function reedit4($order_id, Request $request)  {
         if (isset($this->naryadRecord['brig_e_ch'])) {
         $engineers_txt = Brigade_Engineer::find(explode(",",$this->naryadRecord['brig_e_ch']));
         }
-     
+
         $brigade_txt = Brigade_Member::find(explode(",",$naryad->brigade_m));
         $engineers_txt = Brigade_Engineer::find(explode(",",$naryad->brigade_e));
 
@@ -629,9 +629,9 @@ public function reedit4($order_id, Request $request)  {
         $preparations =   Preparation::get_data($naryad->id);
         $measures =   Measure::get_data($naryad->id);
         /*PDF::setOptions(['dpi' => 150, 'defaultFont' => 'sans-serif']);*/
-        
+
        /* $pdf = Facade::loadView('naryads.pdf', [ */
-        $pdf = \Barryvdh\DomPDF\Facade::loadView('naryads.pdf', [ 
+        $pdf = \Barryvdh\DomPDF\Facade::loadView('naryads.pdf', [
             'naryad'=>$naryad,
             'mode'=>'pdf',
             'nom_naryad'=>$nom_naryad,
@@ -648,7 +648,7 @@ public function reedit4($order_id, Request $request)  {
             'measures'=>$measures
             ])->setPaper('a4', 'landscape')->setWarnings(false);
 
-           // $responce = $pdf->download('Naryad.pdf');            
+           // $responce = $pdf->download('Naryad.pdf');
 
          return $pdf->stream('Naryad.pdf');
         // return $pdf->download  ('Naryad.pdf');
@@ -659,6 +659,6 @@ public function reedit4($order_id, Request $request)  {
 
     }
 
-    
+
 
 }

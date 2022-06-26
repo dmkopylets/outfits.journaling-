@@ -1,7 +1,7 @@
 
 @extends('layouts.app')
-@section('content')   
-   
+@section('content')
+
 <div class="container">
     <h2><strong>Електронний Журнал нарядів ({{$branch->body}})</strong></h2>
     <div class="flex-center position-ref full-height">
@@ -39,6 +39,7 @@
                     </tbody>
                 </table>
             </div>
+            {{ $records->links() }}
         </form>
 </div>
 </div>

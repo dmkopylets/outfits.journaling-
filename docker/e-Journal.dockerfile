@@ -1,4 +1,4 @@
-FROM webdevops/php-apache-dev:7.4-alpine
+FROM webdevops/php-apache-dev:8.0-alpine AS e-journal-php74ApacheAlpine
 
 # Необов'язкова рядок із зазначенням автора образу
 MAINTAINER uncle.dimaz <uncle.dima.k@gmail.com>
@@ -8,12 +8,13 @@ LABEL description="Alpine based image with apache2 and php7.4"
 # PHP_INI_DIR to be symmetrical with official php docker image
 ENV PHP_INI_DIR /usr/local/etc/php
 ENV TZ "Europe/Kiev"
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ENV APACHE_LOG_DIR /var/www/logs
 #ENV APACHE_LOCK_DIR /var/lock/apache2
 #ENV APACHE_PID_FILE /var/run/apache2.pid
 
 ENV APPLICATION_USER=application APPLICATION_GROUP=application APPLICATION_PATH=/public
-ENV APACHE_RUN_USER application APACHE_RUN_GROUP application
+ENV APACHE_RUN_USER=application APACHE_RUN_GROUP=application
 
 COPY ./docker/conf/ /opt/docker/
 
@@ -57,6 +58,8 @@ RUN rm -rf /var/www/logs \
  && ln -sf /dev/stdout /var/www/logs/access.log \
  && ln -sf /dev/stderr /var/www/logs/error.log 
 
+#USER application
+
 # Граємося з правами на всякий випадок
 RUN chown -R application:application /var/www/localhost/htdocs/
 RUN chown -R application:application /var/www/logs/
@@ -82,7 +85,7 @@ RUN set -x \
         autoconf \
         g++ \
         make \
-    && docker-php-ext-enable xdebug \
+    # && docker-php-ext-enable xdebug \
     # && a2enmod rewrite \
     # Enable php development services
     && docker-service enable syslog \
@@ -90,8 +93,3 @@ RUN set -x \
     && docker-service enable ssh \
     && docker-run-bootstrap \
     && docker-image-cleanup
-
-
-
-
-

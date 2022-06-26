@@ -17,10 +17,11 @@ services:
      #   !!!!!!!!!!  ПАПКА З ПРОЕКТОМ !!!!!!!!
      # монтуємо нашу кореневу директорію (з index.php-скриптом) в кореневу папку http-сервера контейнера
       - .:/var/www/localhost/htdocs/
+      - ./logs:/var/www/logs/     
      # монтуєм файл логів доступу Apache2 в контейнер
-      - ./docker/logs/access.log:/var/www/logs/access.log
+     # - ./logs/access.log:/var/www/logs/access.log
      # монтуєм файл логів помилок Apache2 в контейнер
-      - ./docker/logs/error.log:/var/www/logs/error.log
+     # - ./logs/error.log:/var/www/logs/error.log
     environment:
       #PHP_EXTENSION_XDEBUG: 1
       PHP_INI_DIR: /usr/local/etc/php
